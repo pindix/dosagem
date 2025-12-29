@@ -1,4 +1,4 @@
-// 1. Elementos da Interface
+// --- ELEMENTOS ---
 const el = {
     pais: document.getElementById("pais"),
     nome: document.getElementById("nome"),
@@ -14,179 +14,189 @@ const el = {
     dose: document.getElementById("dose"),
     via: document.getElementById("via"),
     intervalo: document.getElementById("intervalo"),
-    resultado: document.getElementById("resultado"),
-    themeBtn: document.getElementById("themeBtn"),
-    themeIcon: document.getElementById("themeIcon")
+    resultado: document.getElementById("resultado")
 };
 
-let bancoDados = {}; // Onde guardaremos as abas do Excel
+let bancoDados = {};
 
-// 2. Carregar Excel
+// --- CARREGAMENTO ---
 async function carregarExcel() {
     try {
-        const response = await fetch('medicamentos.xlsx');
-        const arrayBuffer = await response.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer);
-        
-        // Carrega cada aba
-        workbook.SheetNames.forEach(aba => {
-            bancoDados[aba.toLowerCase()] = XLSX.utils.sheet_to_json(workbook.Sheets[aba]);
-        });
-        console.log("Dados carregados:", Object.keys(bancoDados));
-    } catch (err) {
-        console.error("Erro ao carregar Excel. Use o Live Server!", err);
-    }
+        const resp = await fetch('medicamentos.xlsx');
+        const data = await resp.arrayBuffer();
+        const wb = XLSX.read(data);
+        wb.SheetNames.forEach(n => bancoDados[n.toLowerCase()] = XLSX.utils.sheet_to_json(wb.Sheets[n]));
+    } catch (e) { console.error("Erro ao carregar Excel."); }
 }
 
-// 3. Busca Inteligente (País + Universal)
-function buscarDadosMedicamento(nomeMedicamento) {
+// --- BUSCA E FILTRO ---
+function buscarMedicamento() {
+    const termo = el.nome.value.trim().toLowerCase();
     const pais = el.pais.value.toLowerCase();
-    const termo = nomeMedicamento.toLowerCase().trim();
-    
-    // Primeiro tenta no país selecionado
+    if (!termo) return null;
+
+    // Procura no país, se não achar, procura no universal
     let lista = (bancoDados[pais] || []).filter(m => m.nome.toLowerCase() === termo);
-    
-    // Se não achou e não for a aba universal, tenta na universal
     if (lista.length === 0 && pais !== "universal") {
         lista = (bancoDados["universal"] || []).filter(m => m.nome.toLowerCase() === termo);
     }
-    return lista.length > 0 ? lista : null;
+    
+    if (lista.length === 0) return null;
+
+    // O CHECK: Encontra a linha que bate com a Dose e Via selecionadas
+    return lista.find(m => 
+        String(m.dose || "").toLowerCase() === el.dose.value && 
+        String(m.via || "").toLowerCase() === el.via.value
+    ) || lista[0];
 }
 
-// 4. Sugestões
-el.nome.addEventListener("input", () => {
-    const termo = el.nome.value.toLowerCase().trim();
-    const pais = el.pais.value.toLowerCase();
-    el.sugestoes.innerHTML = "";
-
-    if (termo.length < 2) { el.sugestoes.style.display = "none"; return; }
-
-    // Junta nomes do país + universal (sem duplicados)
-    const nomesPais = (bancoDados[pais] || []).map(m => m.nome);
-    const nomesUni = (bancoDados["universal"] || []).map(m => m.nome);
-    const todosNomes = [...new Set([...nomesPais, ...nomesUni])];
-
-    const filtrados = todosNomes.filter(n => n.toLowerCase().includes(termo));
-
-    if (filtrados.length > 0) {
-        el.sugestoes.style.display = "block";
-        filtrados.forEach(n => {
-            const item = document.createElement("div");
-            item.className = "sugestao_item";
-            item.textContent = n;
-            item.onclick = () => { el.nome.value = n; el.sugestoes.style.display = "none"; mostrarCampos(); };
-            el.sugestoes.appendChild(item);
-        });
-    }
-});
-
-// 5. Exibir Campos Dinâmicos
-function mostrarCampos() {
-    const dados = buscarDadosMedicamento(el.nome.value);
-    if (!dados) return esconderTudo();
-
-    // Pegamos a primeira ocorrência para configurar a interface
-    const med = dados[0]; 
-    const camposPermitidos = String(med.campos || "").toLowerCase();
-
-    // Lógica de visibilidade
-    el.pesoDiv.style.display = camposPermitidos.includes("peso") ? "flex" : "none";
-    el.idadeDiv.style.display = camposPermitidos.includes("idade") ? "flex" : "none";
-    el.dosagemDiv.style.display = camposPermitidos.includes("dosagem") ? "flex" : "none";
-    el.via.style.display = med.via ? "block" : "none";
-    el.dose.style.display = med.dose ? "block" : "none";
-
-    // Configura Dosagem Padrão e Unidade
-    if (camposPermitidos.includes("dosagem")) {
-        el.dosagem.value = med.dosagem_padrao || "";
-        el.dosagemUnidade.textContent = med.unidade || "mg/kg";
+// --- INTERFACE DINÂMICA ---
+function atualizarInterface() {
+    const m = buscarMedicamento();
+    
+    if (!m) {
+        // Se não encontrar o nome exato, esconde campos e limpa inputs (exceto SELECTS)
+        [el.pesoDiv, el.idadeDiv, el.dosagemDiv, el.intervalo].forEach(d => d.style.display = "none");
+        el.peso.value = ""; el.idade.value = ""; el.dosagem.value = "";
+        return;
     }
 
-    // Configura Intervalos
-    if (med.intervalo) {
-        el.intervalo.innerHTML = "";
-        String(med.intervalo).split(",").forEach(h => {
-            el.intervalo.add(new Option(`De ${h.trim()} em ${h.trim()}h`, h.trim()));
-        });
+    const campos = String(m.campos || "").toLowerCase();
+    
+    // Mostrar/Esconder Divs
+    el.pesoDiv.style.display = campos.includes("peso") ? "flex" : "none";
+    el.idadeDiv.style.display = campos.includes("idade") ? "flex" : "none";
+    el.dosagemDiv.style.display = campos.includes("dosagem") ? "flex" : "none";
+
+    // Configurar Dosagem e Unidade
+    if (campos.includes("dosagem")) {
+        el.dosagemUnidade.textContent = m.unidade || "mg/kg";
+        if (!el.dosagem.value) el.dosagem.value = m.dosagem_padrao || "";
+    }
+
+    // Configurar Intervalo
+    if (m.intervalo) {
         el.intervalo.style.display = "block";
+        const opcoes = String(m.intervalo).split(",");
+        if (el.intervalo.dataset.last !== String(m.intervalo)) {
+            el.intervalo.innerHTML = "";
+            opcoes.forEach(h => el.intervalo.add(new Option(`De ${h.trim()} em ${h.trim()}h`, h.trim())));
+            el.intervalo.dataset.last = String(m.intervalo);
+        }
     } else {
         el.intervalo.style.display = "none";
     }
 }
 
-// 6. Calcular com Alertas e Correções
+// --- CÁLCULO ---
 function calcular() {
-    const dados = buscarDadosMedicamento(el.nome.value);
-    if (!dados) { alert("Medicamento não encontrado!"); return; }
+    const m = buscarMedicamento();
+    if (!m) {
+        el.resultado.innerHTML = "⚠️ Medicamento não encontrado na base de dados.";
+        el.resultado.style.background = "#ff4d4d";
+        return;
+    }
 
-    // Pega os valores atuais
     let p = parseFloat(el.peso.value) || 0;
     let d = parseFloat(el.dosagem.value) || 0;
-    let iValor = parseFloat(el.idade.value) || 0;
-    let iMult = parseFloat(el.idadeUnidade.value);
-    let idadeDias = iValor * iMult;
+    let iVal = parseFloat(el.idade.value) || 0;
+    let iDias = iVal * parseFloat(el.idadeUnidade.value);
     let h = parseFloat(el.intervalo.value) || 1;
+    let c = m.concentracoao || 1;
+    let n = m.nome;
 
-    // Tenta encontrar a linha específica (ex: filtrando por via/dose se existirem)
-    const med = dados.find(m => 
-        (m.via ? m.via.toLowerCase() === el.via.value.toLowerCase() : true) &&
-        (m.dose ? m.dose.toLowerCase() === el.dose.value.toLowerCase() : true)
-    ) || dados[0];
-
-    // --- CORREÇÕES ---
+    // Notificações de Correção (Alerts)
     if (el.pesoDiv.style.display !== "none") {
-        if (p < med.peso_minimo) { p = med.peso_minimo; alert("Peso abaixo do limite. Corrigido."); el.peso.value = p; }
-        if (p > med.peso_maximo) { p = med.peso_maximo; alert("Peso acima do limite. Corrigido."); el.peso.value = p; }
+        if (p < m.peso_minimo || p > m.peso_maximo) {
+            p = p < m.peso_minimo ? m.peso_minimo : m.peso_maximo;
+            alert(`Peso corrigido para ${p}kg (Intervalo permitido: ${m.peso_minimo}-${m.peso_maximo}kg)`);
+            el.peso.value = p;
+        }
     }
 
     if (el.idadeDiv.style.display !== "none") {
-        if (idadeDias < med.idade_minima) { 
-            iValor = med.idade_minima / iMult; 
-            alert("Idade abaixo do limite. Corrigida."); 
-            el.idade.value = iValor.toFixed(1);
+        if (iDias < m.idade_minima || iDias > m.idade_maxima) {
+            const novaIdadeDias = iDias < m.idade_minima ? m.idade_minima : m.idade_maxima;
+            iVal = (novaIdadeDias / parseFloat(el.idadeUnidade.value)).toFixed(1);
+            alert(`Idade corrigida para ${iVal} (Intervalo em dias: ${m.idade_minima}-${m.idade_maxima})`);
+            el.idade.value = iVal;
+            iDias = novaIdadeDias;
         }
     }
 
     if (el.dosagemDiv.style.display !== "none") {
-        if (d < med.dosagem_minima) { d = med.dosagem_minima; alert("Dosagem baixa. Corrigida."); el.dosagem.value = d; }
-        if (d > med.dosagem_maxima) { d = med.dosagem_maxima; alert("Dosagem alta. Corrigida."); el.dosagem.value = d; }
+        if (d < m.dosagem_minima || d > m.dosagem_maxima) {
+            d = d < m.dosagem_minima ? m.dosagem_minima : m.dosagem_maxima;
+            alert(`Dosagem corrigida para ${d}${m.unidade} (Intervalo: ${m.dosagem_minima}-${m.dosagem_maxima})`);
+            el.dosagem.value = d;
+        }
     }
 
-    // --- CÁLCULO FINAL (Executa a string do Excel) ---
     try {
-        const c = med.concentracacoao || 1; // Nome da sua coluna no Excel
-        const n = med.nome;
-        const res = eval("`" + med.formula + "`"); // Executa o Template String do Excel
-        el.resultado.innerHTML = res;
+        // Executa a fórmula do Excel como Template String
+        const formulaFinal = eval("`" + m.formula + "`");
+        el.resultado.innerHTML = formulaFinal;
+        el.resultado.style.background = "var(--primary)";
         el.resultado.style.whiteSpace = "pre-wrap";
-    } catch (err) {
-        el.resultado.innerHTML = "Erro na fórmula do Excel.";
+    } catch (e) {
+        el.resultado.innerHTML = "Erro na fórmula do medicamento.";
     }
 }
 
-// 7. Funções de Apoio
-function limpar() {
-    ["peso", "idade", "dosagem", "resultado"].forEach(id => el[id].value = el[id].innerHTML = "");
-    esconderTudo();
-}
+// --- SUGESTÕES ---
+el.nome.addEventListener("input", () => {
+    const termo = el.nome.value.toLowerCase().trim();
+    el.sugestoes.innerHTML = "";
+    if (termo.length < 2) { el.sugestoes.style.display = "none"; atualizarInterface(); return; }
 
-function esconderTudo() {
-    [el.pesoDiv, el.idadeDiv, el.dosagemDiv, el.intervalo, el.via, el.dose].forEach(d => d.style.display = "none");
-}
+    const pais = el.pais.value.toLowerCase();
+    const listaSug = [...new Set([...(bancoDados[pais] || []), ...(bancoDados["universal"] || [])].map(m => m.nome))];
+    const filtrados = listaSug.filter(n => n.toLowerCase().includes(termo));
 
-// Troca de País Feedback
-el.pais.addEventListener("change", () => {
-    el.resultado.innerHTML = "A carregar padrões de " + el.pais.options[el.pais.selectedIndex].text + "...";
-    setTimeout(() => { limpar(); el.resultado.innerHTML = ""; }, 800);
+    if (filtrados.length > 0) {
+        el.sugestoes.style.display = "block";
+        filtrados.forEach(n => {
+            const div = document.createElement("div");
+            div.textContent = n;
+            div.onclick = () => { el.nome.value = n; el.sugestoes.style.display = "none"; atualizarInterface(); };
+            el.sugestoes.appendChild(div);
+        });
+    }
+    atualizarInterface();
 });
 
-// Tema
-el.themeBtn.onclick = () => {
-    const dark = document.body.getAttribute("data-theme") === "dark";
-    document.body.setAttribute("data-theme", dark ? "" : "dark");
-    el.themeIcon.className = dark ? "ri-moon-line" : "ri-sun-line";
-};
+// --- LIMPAR ---
+function limpar() {
+    ["peso", "idade", "dosagem", "resultado"].forEach(k => {
+        if(el[k].tagName === "P") el[k].innerHTML = "";
+        else el[k].value = "";
+    });
+    atualizarInterface();
+}
 
-// Iniciar
+// --- EVENTOS DE MUDANÇA ---
+el.pais.addEventListener("change", () => {
+    el.resultado.innerHTML = "Atualizando padrões...";
+    setTimeout(() => { limpar(); el.resultado.innerHTML = ""; }, 600);
+});
+
+el.dose.addEventListener("change", atualizarInterface);
+el.via.addEventListener("change", atualizarInterface);
+
+// --- INICIALIZAÇÃO ---
 carregarExcel();
 document.addEventListener("click", (e) => { if (e.target !== el.nome) el.sugestoes.style.display = "none"; });
+
+// Tema
+const themeBtn = document.getElementById('themeBtn');
+themeBtn.addEventListener('click', () => {
+    const body = document.body;
+    const icon = document.getElementById('themeIcon');
+    if (body.getAttribute('data-theme') === 'dark') {
+        body.removeAttribute('data-theme');
+        icon.className = 'ri-moon-line';
+    } else {
+        body.setAttribute('data-theme', 'dark');
+        icon.className = 'ri-sun-line';
+    }
+});
