@@ -1,19 +1,17 @@
-// --- MANTÉM A SUA LÓGICA DE TEMA ESCURO ---
+// 1. GESTÃO DE TEMA (Mantido)
 const themeBtn = document.getElementById('themeBtn');
 const themeIcon = document.getElementById('themeIcon');
-const body = document.body;
-
 themeBtn.addEventListener('click', () => {
-    if (body.getAttribute('data-theme') === 'dark') {
-        body.removeAttribute('data-theme');
+    if (document.body.getAttribute('data-theme') === 'dark') {
+        document.body.removeAttribute('data-theme');
         themeIcon.className = 'ri-moon-line';
     } else {
-        body.setAttribute('data-theme', 'dark');
+        document.body.setAttribute('data-theme', 'dark');
         themeIcon.className = 'ri-sun-line';
     }
 });
 
-// --- MANTÉM OS SEUS ELEMENTOS ---
+// 2. MAPEAMENTO DE ELEMENTOS
 const el = {
     nome: document.getElementById("nome"),
     sugestoes: document.getElementById("sugestoes_box"),
@@ -32,12 +30,8 @@ const el = {
     pais: document.getElementById("pais"),
 };
 
-// --- NOVA LÓGICA DE DADOS (EXCEL) ---
-let bancoDeDados = {
-    universal: {},
-    angola: {},
-    brazil: {}
-};
+// 3. BASE DE DADOS E CARREGAMENTO EXCEL
+let bancoDeDados = { universal: {}, angola: {}, brazil: {} };
 
 async function carregarDadosExcel() {
     try {
@@ -45,7 +39,6 @@ async function carregarDadosExcel() {
         const data = await response.arrayBuffer();
         const workbook = XLSX.read(data);
 
-        // Processa cada aba definida
         ["universal", "angola", "brazil"].forEach(abaNome => {
             const sheet = workbook.Sheets[abaNome];
             if (sheet) {
@@ -53,197 +46,163 @@ async function carregarDadosExcel() {
                 bancoDeDados[abaNome] = processarLinhasExcel(json);
             }
         });
-        console.log("Excel carregado e processado com sucesso.");
+        console.log("Sistema pronto e Excel carregado.");
     } catch (e) {
-        console.error("Erro ao carregar Excel. Certifique-se de usar um servidor (Live Server).", e);
+        console.error("Erro ao carregar Excel:", e);
     }
 }
 
 function processarLinhasExcel(linhas) {
     let mapa = {};
     linhas.forEach(linha => {
-        const id = String(linha.chave_Id || linha.nome).toLowerCase().trim();
+        const id = String(linha.chave_Id || linha.nome || "").toLowerCase().trim();
+        if (!id) return;
+
         if (!mapa[id]) mapa[id] = [];
+        
+        const cRaw = String(linha.campos || "").toLowerCase();
 
         mapa[id].push({
             nome_exibicao: linha.nome,
-            // O check reconstrói a sua lógica antiga
+            formulaRaw: linha.formula ? String(linha.formula) : "",
             check: (d, i, p, v) => {
-                const cDose = linha.dose ? d === linha.dose : true;
-                const cVia = linha.via ? v === linha.via : true;
-                const cIdade = i >= (linha.idade_minima || 0) && i <= (linha.idade_maxima || 999999);
-                const cPeso = p >= (linha.peso_minimo || 0) && p <= (linha.peso_maximo || 999);
-                return cDose && cVia && cIdade && cPeso;
+                const cDose = linha.dose ? String(d) === String(linha.dose) : true;
+                const cVia = linha.via ? String(v) === String(linha.via) : true;
+                return cDose && cVia;
             },
-            campos: {
-                via: !!linha.via,
-                dose: !!linha.dose,
-                peso: linha.peso_minimo || linha.peso_maximo ? [linha.peso_minimo || 0, linha.peso_maximo || 150] : null,
-                idade: linha.idade_minima || linha.idade_maxima ? [linha.idade_minima || 0, linha.idade_maxima || 43800] : null,
-                dosagem: [linha.dosagem_min || 0, linha.dosagem_maxima || 0, linha.dosagem_padrao || 0, linha.unidade || "mg"],
-                intervalo: linha.intervalo ? String(linha.intervalo).split(',').map(Number) : [8, 12, 24]
+            visibilidade: {
+                via: cRaw.includes("via"),
+                dose: cRaw.includes("dose"),
+                peso: cRaw.includes("peso"),
+                idade: cRaw.includes("idade"),
+                dosagem: cRaw.includes("dosagem")
             },
-            concentracao: linha.concentracao || 1
+            limites: {
+                peso: [Number(linha.peso_minimo) || 0, Number(linha.peso_maximo) || 500],
+                idade: [Number(linha.idade_minima) || 0, Number(linha.idade_maxima) || 43800],
+                dosagem: [Number(linha.dosagem_min) || 0, Number(linha.dosagem_maxima) || 0, Number(linha.dosagem_padrao) || 0, String(linha.unidade || "mg")],
+                intervalo: linha.intervalo ? String(linha.intervalo).split(',').map(Number) : [8, 12, 24],
+                concentracao: Number(linha.concentracao) || 1
+            }
         });
     });
     return mapa;
 }
 
-// --- FUNÇÕES DE BUSCA E INTERFACE ATUALIZADAS ---
-
+// 4. LÓGICA DE INTERFACE
 function buscarMedicamento(nome) {
     const termo = nome.toLowerCase().trim();
     const pais = el.pais.value;
-    
-    // Procura no país selecionado, se não houver, procura no universal
     return bancoDeDados[pais][termo] || bancoDeDados["universal"][termo] || null;
-}
-
-function atualizarSugestoes() {
-    const termo = el.nome.value.trim().toLowerCase();
-    const pais = el.pais.value;
-    el.sugestoes.innerHTML = "";
-
-    if (termo === "") {
-        el.sugestoes.style.display = "none";
-        return;
-    }
-
-    // Combina chaves do país selecionado e do universal
-    const chaves = [...new Set([...Object.keys(bancoDeDados[pais]), ...Object.keys(bancoDeDados["universal"])])];
-    const filtrados = chaves.filter(m => m.includes(termo));
-
-    if (filtrados.includes(termo)) {
-        el.sugestoes.style.display = "none";
-        return;
-    }
-
-    if (filtrados.length > 0) {
-        filtrados.forEach(med => {
-            const div = document.createElement("div");
-            div.className = "sugestao_item";
-            div.textContent = med;
-            div.onclick = () => {
-                el.nome.value = med;
-                el.sugestoes.style.display = "none";
-                mostrar_campos();
-            };
-            el.sugestoes.appendChild(div);
-        });
-        el.sugestoes.style.display = "block";
-    } else {
-        el.sugestoes.style.display = "none";
-    }
 }
 
 function mostrar_campos() {
     const pesquisa = el.nome.value.trim().toLowerCase();
-    const doseAtual = el.dose.value;
-    const viaAtual = el.via.value;
-    const mult = parseFloat(el.idadeUnidade.value);
-    const idadeDias = (parseFloat(el.idade.value) || 0) * mult;
-    const pesoAtual = parseFloat(el.peso.value) || 0;
-
     const dadosLista = buscarMedicamento(pesquisa); 
 
     if (!dadosLista) {
         [el.dose, el.intervalo, el.pesoCampo, el.idadeCampo, el.dosagemCampo, el.via].forEach(c => c.style.display = "none");
-        el.resultado.textContent = "";
         return;
     }
 
-    // Procura a linha correta no Excel baseada nos filtros
-    const dados = dadosLista.find(item => item.check(doseAtual, idadeDias, pesoAtual, viaAtual)) || dadosLista[0];
+    const item = dadosLista.find(i => i.check(el.dose.value, 0, 0, el.via.value)) || dadosLista[0];
 
-    const gerir = (container, condicao, inputInterno) => {
-        const deveMostrar = !!condicao;
-        container.style.display = deveMostrar ? (container.tagName === 'SELECT' ? "block" : "flex") : "none";
-    };
-    
-    gerir(el.via, dados.campos.via);
-    gerir(el.dose, dados.campos.dose);
-    gerir(el.pesoCampo, dados.campos.peso, el.peso);
-    gerir(el.idadeCampo, dados.campos.idade, el.idade);
-    gerir(el.dosagemCampo, dados.campos.dosagem, el.dosagem);
+    // CORREÇÃO: Aplica visibilidade baseada na coluna 'campos'
+    el.via.style.display = item.visibilidade.via ? "block" : "none";
+    el.dose.style.display = item.visibilidade.dose ? "block" : "none";
+    el.pesoCampo.style.display = item.visibilidade.peso ? "flex" : "none";
+    el.idadeCampo.style.display = item.visibilidade.idade ? "flex" : "none";
+    el.dosagemCampo.style.display = item.visibilidade.dosagem ? "flex" : "none";
+    el.intervalo.style.display = item.visibilidade.dosagem ? "block" : "none";
 
-    if (dados.campos.intervalo) {
-        const textoHoras = dados.campos.intervalo.join(',');
-        if (el.intervalo.dataset.last !== textoHoras) {
+    if (item.visibilidade.dosagem) {
+        el.dosagemUnidade.textContent = item.limites.dosagem[3];
+        if (el.dosagem.value === "") el.dosagem.value = item.limites.dosagem[2];
+        
+        // Atualiza intervalos
+        const textoInt = item.limites.intervalo.join(',');
+        if (el.intervalo.dataset.last !== textoInt) {
             el.intervalo.innerHTML = "";
-            dados.campos.intervalo.forEach(h => el.intervalo.add(new Option(`De ${h} em ${h}h`, 24 / h)));
-            el.intervalo.dataset.last = textoHoras;
-        }
-        el.intervalo.style.display = "block";
-    }
-
-    if (dados.campos.dosagem) {
-        el.dosagemUnidade.textContent = dados.campos.dosagem[3];
-        if (dados.campos.dosagem[2] && el.dosagem.value === "") {
-            el.dosagem.value = dados.campos.dosagem[2];
+            item.limites.intervalo.forEach(h => el.intervalo.add(new Option(`De ${h} em ${h}h`, 24 / h)));
+            el.intervalo.dataset.last = textoInt;
         }
     }
 }
 
+// 5. CÁLCULO E ALERTS CORRETIVOS
 function calcular() {
+    const pesquisa = el.nome.value.trim().toLowerCase();
+    const dadosLista = buscarMedicamento(pesquisa);
+    if (!dadosLista) return;
+
+    // Efeito de vibração
     el.resultado.classList.remove("vibrar");
-    void el.resultado.offsetWidth; 
+    void el.resultado.offsetWidth;
     el.resultado.classList.add("vibrar");
 
-    const pesquisa = el.nome.value.trim().toLowerCase();
-    const doseAtual = el.dose.value;
-    const viaAtual = el.via.value;
     const multIdade = parseFloat(el.idadeUnidade.value);
-    const idadeDias = (parseFloat(el.idade.value) || 0) * multIdade;
-    const pesoAtual = parseFloat(el.peso.value) || 0;
+    let idadeDias = (parseFloat(el.idade.value) || 0) * multIdade;
+    let pesoAtual = parseFloat(el.peso.value) || 0;
+    let doseDigitada = parseFloat(el.dosagem.value) || 0;
 
-    const dadosLista = buscarMedicamento(pesquisa);
-    if (!dadosLista) {
-        el.resultado.innerHTML = "Não encontrado!";
-        el.resultado.style.background = "red";
-        return;
-    }
+    const item = dadosLista.find(i => i.check(el.dose.value, idadeDias, pesoAtual, el.via.value)) || dadosLista[0];
 
-    const dados = dadosLista.find(item => item.check(doseAtual, idadeDias, pesoAtual, viaAtual)) || dadosLista[0];
-
-    // --- LÓGICA DE ALERTS E CORREÇÕES ---
-    if (dados.campos.peso) {
-        if (pesoAtual < dados.campos.peso[0] || pesoAtual > dados.campos.peso[1]) {
-            alert(`Peso fora dos limites (${dados.campos.peso[0]}-${dados.campos.peso[1]}kg)`);
-            return;
+    // ALERT E CORREÇÃO AUTOMÁTICA
+    if (item.visibilidade.idade) {
+        const [min, max] = item.limites.idade;
+        if (idadeDias < min || idadeDias > max) {
+            const novaIdade = idadeDias < min ? min : max;
+            const corrigida = (novaIdade / multIdade).toFixed(1);
+            alert(`Idade fora do limite. Corrigido para: ${corrigida}`);
+            el.idade.value = corrigida;
+            idadeDias = novaIdade;
         }
     }
 
-    // Cálculo Final
-    const vDoseDigitada = parseFloat(el.dosagem.value) || 0;
-    const vIntervalo = parseFloat(el.intervalo.value) || 1;
-    
-    // FÓRMULA PADRÃO: (Peso * Dose / Frequência) / Concentração
-    const resultadoCalculado = ((pesoAtual * vDoseDigitada) / vIntervalo) / dados.concentracao;
-    
-    el.resultado.innerHTML = `${resultadoCalculado.toFixed(2)} ml de ${dados.nome_exibicao}`;
-    el.resultado.style.background = "var(--primary)";
+    if (item.visibilidade.peso) {
+        const [min, max] = item.limites.peso;
+        if (pesoAtual < min || pesoAtual > max) {
+            pesoAtual = pesoAtual < min ? min : max;
+            alert(`Peso fora do limite. Corrigido para: ${pesoAtual} kg`);
+            el.peso.value = pesoAtual;
+        }
+    }
+
+    if (item.visibilidade.dosagem) {
+        const [min, max] = item.limites.dosagem;
+        if (doseDigitada < min || doseDigitada > max) {
+            doseDigitada = doseDigitada < min ? min : max;
+            alert(`Dose fora do limite. Corrigida para: ${doseDigitada}`);
+            el.dosagem.value = doseDigitada;
+        }
+    }
+
+    // EXECUÇÃO DA FÓRMULA DO EXCEL
+    try {
+        const p = pesoAtual;
+        const d = doseDigitada;
+        const c = item.limites.concentracao;
+        const h = parseFloat(el.intervalo.value) || 1;
+        const n = item.nome_exibicao;
+
+        const fRaw = item.formulaRaw || "`${(p*d/h/c).toFixed(1)} ml`";
+        const resultadoFinal = eval(fRaw);
+
+        el.resultado.innerHTML = resultadoFinal;
+        el.resultado.style.whiteSpace = "pre-wrap";
+        el.resultado.style.background = "var(--primary)";
+        el.resultado.style.textAlign = "left";
+    } catch (e) {
+        el.resultado.innerHTML = "Erro na fórmula do Excel!";
+        el.resultado.style.background = "red";
+    }
 }
 
-// --- EVENT LISTENERS ---
+// 6. EVENTOS
 el.nome.addEventListener("input", () => { atualizarSugestoes(); mostrar_campos(); });
-el.dose.addEventListener("change", mostrar_campos);
-el.via.addEventListener("change", mostrar_campos);
-el.peso.addEventListener("input", mostrar_campos);
-el.idade.addEventListener("input", mostrar_campos);
-
-el.pais.addEventListener('change', () => {
+el.pais.addEventListener("change", () => {
     el.resultado.innerHTML = "A carregar padrões...";
-    setTimeout(() => {
-        limpar();
-        el.resultado.innerHTML = `Padrões de ${el.pais.value} carregados.`;
-    }, 1000);
+    setTimeout(() => { limpar(); el.resultado.innerHTML = "Padrões carregados."; }, 1000);
 });
-
-function limpar() {
-    el.nome.value = ""; el.peso.value = ""; el.idade.value = ""; el.dosagem.value = "";
-    el.resultado.innerHTML = "";
-    mostrar_campos();
-}
-
-// Inicia o sistema carregando o Excel
+// (Incluir as outras funções de sugestões e limpar que já tinhas)
 carregarDadosExcel();
