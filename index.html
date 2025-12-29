@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculo de Dosagem</title>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body> 
+
+    <nav>
+        <a href="../index.html" class="btn-back">
+            <i class="ri-arrow-left-line"></i> Início
+        </a>
+        <button class="theme-toggle" id="themeBtn"> 
+            <i class="ri-moon-line" id="themeIcon"></i>
+        </button>
+    </nav>
+
+    <section class="main-tool">
+        <div class="tool-header">
+            <span>CALCULADORA POSOLÓGICA</span>
+            <h2>Calculo de Dosagem</h2>
+        </div>
+        <select id="pais">
+            <option value="universal">Universal 🌐</option>
+            <option value="angola">Angola 🇦🇴</option>
+            <option value="brazil">Brazil 🇧🇷</option>
+            <option value="portugal">Portugal 🇵🇹</option>
+        </select>
+        <div class="calculator-box" data-aos="fade-up">  
+            
+            <div class="entradas_de_dados" id="campo_nome">
+                <i class="ri-medicine-bottle-fill"></i>
+                <input type="text" placeholder="Medicamento..." id="nome" autocomplete="off">
+                <div id="sugestoes_box"></div>
+            </div>
+            <div class="entradas_de_dados" id="campo_de_peso">
+                <i class="ri-scales-2-fill"></i>
+                <input type="number" placeholder="Peso..." id="peso">
+                <p>kg</p>
+            </div>
+            <div class="entradas_de_dados" id="campo_de_idade">
+                <i class="ri-user-heart-line"></i>
+                <input type="number" placeholder="Idade..." id="idade">
+                <select id="unidade_de_idade">
+                    <option value="365">anos</option>
+                    <option value="30">meses</option>
+                    <option value="7">semanas</option>
+                    <option value="1">dias</option>
+                </select>
+            </div>
+            <div class="entradas_de_dados" id="campo_de_dosagem">
+                <i class="ri-capsule-line"></i>
+                <input type="number" placeholder="Dosagem..." id="dosagem">
+                <p id="unidade_de_dosagem">mg/kg</p>
+            </div>
+            <select id="dose">
+                <option value="pediatrica">Dose Pediátrica</option>
+                <option value="adulta">Dose Adulta</option>
+            </select>
+            <select id="intervalo"></select>
+        <select id="via">
+            <option value="iv">Intravenosa / IV</option>
+            <option value="im">Intramuscular / IM</option>
+        </select>
+            
+
+            <div class="caxa_de_botoes">
+                <button class="botao" onclick="calcular()">Calcular</button>
+                <i class="ri-delete-bin-line" id="limpador" onclick="limpar()"></i>
+            </div>
+        </div>
+
+        <p class="resultado-display" id="resultado" data-aos="fade-up" data-aos-delay="100"></p>
+    </section>
+
+    <footer>
+        Desenvolvido por Mpindi &copy; 2025
+    </footer>
+
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+<script>
+  AOS.init({
+    duration: 1000,
+    once: true
+  });
+</script>
+    
+</body>
+</html>
