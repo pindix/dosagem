@@ -65,9 +65,11 @@ function processarLinhasExcel(linhas) {
         const id = String(linha.chave_Id || linha.nome).toLowerCase().trim();
         if (!mapa[id]) mapa[id] = [];
 
+        // Lemos a coluna 'campos' do Excel. Se estiver vazia, criamos uma string vazia.
+        const camposConfig = String(linha.campos || "").toLowerCase();
+
         mapa[id].push({
             nome_exibicao: linha.nome,
-            // O check reconstrói a sua lógica antiga
             check: (d, i, p, v) => {
                 const cDose = linha.dose ? d === linha.dose : true;
                 const cVia = linha.via ? v === linha.via : true;
@@ -75,11 +77,17 @@ function processarLinhasExcel(linhas) {
                 const cPeso = p >= (linha.peso_minimo || 0) && p <= (linha.peso_maximo || 999);
                 return cDose && cVia && cIdade && cPeso;
             },
+            // AGORA usamos a tua coluna 'campos' para decidir o que mostrar
+            configExibicao: {
+                via: camposConfig.includes("via"),
+                dose: camposConfig.includes("dose"),
+                peso: camposConfig.includes("peso"),
+                idade: camposConfig.includes("idade"),
+                dosagem: camposConfig.includes("dosagem")
+            },
             campos: {
-                via: !!linha.via,
-                dose: !!linha.dose,
-                peso: linha.peso_minimo || linha.peso_maximo ? [linha.peso_minimo || 0, linha.peso_maximo || 150] : null,
-                idade: linha.idade_minima || linha.idade_maxima ? [linha.idade_minima || 0, linha.idade_maxima || 43800] : null,
+                peso: [linha.peso_minimo || 0, linha.peso_maximo || 150],
+                idade: [linha.idade_minima || 0, linha.idade_maxima || 43800],
                 dosagem: [linha.dosagem_min || 0, linha.dosagem_maxima || 0, linha.dosagem_padrao || 0, linha.unidade || "mg"],
                 intervalo: linha.intervalo ? String(linha.intervalo).split(',').map(Number) : [8, 12, 24]
             },
@@ -88,6 +96,7 @@ function processarLinhasExcel(linhas) {
     });
     return mapa;
 }
+
 
 // --- FUNÇÕES DE BUSCA E INTERFACE ATUALIZADAS ---
 
@@ -148,41 +157,43 @@ function mostrar_campos() {
 
     if (!dadosLista) {
         [el.dose, el.intervalo, el.pesoCampo, el.idadeCampo, el.dosagemCampo, el.via].forEach(c => c.style.display = "none");
-        el.resultado.textContent = "";
         return;
     }
 
-    // Procura a linha correta no Excel baseada nos filtros
     const dados = dadosLista.find(item => item.check(doseAtual, idadeDias, pesoAtual, viaAtual)) || dadosLista[0];
 
-    const gerir = (container, condicao, inputInterno) => {
-        const deveMostrar = !!condicao;
+    // FUNÇÃO QUE LIGA/DESLIGA OS CAMPOS BASEADO NA COLUNA 'CAMPOS' DO EXCEL
+    const gerir = (container, deveMostrar) => {
         container.style.display = deveMostrar ? (container.tagName === 'SELECT' ? "block" : "flex") : "none";
     };
     
-    gerir(el.via, dados.campos.via);
-    gerir(el.dose, dados.campos.dose);
-    gerir(el.pesoCampo, dados.campos.peso, el.peso);
-    gerir(el.idadeCampo, dados.campos.idade, el.idade);
-    gerir(el.dosagemCampo, dados.campos.dosagem, el.dosagem);
+    // Aqui usamos a nova propriedade 'configExibicao'
+    gerir(el.via, dados.configExibicao.via);
+    gerir(el.dose, dados.configExibicao.dose);
+    gerir(el.pesoCampo, dados.configExibicao.peso);
+    gerir(el.idadeCampo, dados.configExibicao.idade);
+    gerir(el.dosagemCampo, dados.configExibicao.dosagem);
 
-    if (dados.campos.intervalo) {
+    // O intervalo aparece sempre que houver dosagem (ou podes adicionar 'intervalo' na coluna campos também)
+    gerir(el.intervalo, dados.configExibicao.dosagem);
+
+    if (dados.campos.intervalo && dados.configExibicao.dosagem) {
         const textoHoras = dados.campos.intervalo.join(',');
         if (el.intervalo.dataset.last !== textoHoras) {
             el.intervalo.innerHTML = "";
             dados.campos.intervalo.forEach(h => el.intervalo.add(new Option(`De ${h} em ${h}h`, 24 / h)));
             el.intervalo.dataset.last = textoHoras;
         }
-        el.intervalo.style.display = "block";
     }
 
-    if (dados.campos.dosagem) {
+    if (dados.configExibicao.dosagem) {
         el.dosagemUnidade.textContent = dados.campos.dosagem[3];
         if (dados.campos.dosagem[2] && el.dosagem.value === "") {
             el.dosagem.value = dados.campos.dosagem[2];
         }
     }
 }
+
 
 function calcular() {
     el.resultado.classList.remove("vibrar");
